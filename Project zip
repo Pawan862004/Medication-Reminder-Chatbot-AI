@@ -1,0 +1,404 @@
+<!-- medication-reminder-bot.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Medication Reminder Bot</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(-45deg, #e6e9f0, #8ca4c2, #8ca9c6, #e9eef3);
+      background-size: 400% 400%;
+      animation: gradientBG 15s ease infinite;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    @keyframes gradientBG {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .pill {
+      position: absolute;
+      width: 12px;
+      height: 30px;
+      background: radial-gradient(#e74c3c, #c0392b);
+      border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+      animation: float 12s linear infinite;
+      opacity: 0.3;
+      z-index: 1;
+    }
+
+    .pill:nth-child(odd) {
+      background: radial-gradient(#3498db, #2980b9);
+    }
+
+    @keyframes float {
+      0% { transform: translateY(100vh) translateX(0); }
+      100% { transform: translateY(-100vh) translateX(50px); }
+    }
+
+    .container {
+      background: #ffffffdd;
+      padding: 25px;
+      border-radius: 20px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      max-width: 420px;
+      width: 90%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      z-index: 2;
+      border: 2px solid #d4d9e3;
+      backdrop-filter: blur(10px);
+    }
+
+    h1 {
+      font-size: 1.6em;
+      text-align: center;
+      color: #2d2d2d;
+      margin-bottom: 18px;
+    }
+
+    #chat-window {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+    }
+
+    #chat-log {
+      border: 1px solid #ddd;
+      padding: 15px;
+      height: 280px;
+      overflow-y: auto;
+      background-color: #fbfbfc;
+      border-radius: 10px;
+      font-size: 14px;
+      scroll-behavior: smooth;
+    }
+
+    #input-section {
+      display: flex;
+      margin-top: 12px;
+      width: 100%;
+    }
+
+    #user-input {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      flex-grow: 1;
+      font-size: 14px;
+      background-color: #fff;
+    }
+
+    button {
+      padding: 8px 16px;
+      background: linear-gradient(145deg, #6a82fb, #fc5c7d);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-left: 8px;
+      font-weight: 600;
+      transition: transform 0.2s ease-in-out;
+    }
+
+    button:hover {
+      transform: scale(1.05);
+    }
+
+    select {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-top: 10px;
+      background-color: #ffffff;
+    }
+
+    .bot, .user {
+      padding: 10px 14px;
+      margin: 4px 0;
+      border-radius: 12px;
+      display: inline-block;
+      max-width: 85%;
+      word-wrap: break-word;
+      font-size: 14px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+      clear: both;
+    }
+
+    .bot {
+      background-color: #f1f4ff;
+      float: left;
+      color: #2e2e2e;
+      border-left: 4px solid #6a82fb;
+    }
+
+    .user {
+      background-color: #e4fbea;
+      float: right;
+      text-align: right;
+      color: #2e2e2e;
+      border-right: 4px solid #66bb6a;
+    }
+
+    .dropdown-wrapper {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="pill" style="left: 10%; animation-delay: 0s;"></div>
+  <div class="pill" style="left: 30%; animation-delay: 2s;"></div>
+  <div class="pill" style="left: 50%; animation-delay: 4s;"></div>
+  <div class="pill" style="left: 70%; animation-delay: 6s;"></div>
+  <div class="pill" style="left: 90%; animation-delay: 8s;"></div>
+
+  <div class="container">
+    <h1>Medication Reminder Bot</h1>
+    <div id="chat-window">
+      <div id="chat-log"></div>
+      <div id="input-section">
+        <input type="text" id="user-input" placeholder="Type your message..." />
+        <button onclick="sendMessage()">Send</button>
+        <button onclick="resetChat()" style="background-color: #dc3545;">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="alarm-sound" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" preload="auto"></audio>
+
+  <script>
+    const chatLog = document.getElementById("chat-log");
+    const userInput = document.getElementById("user-input");
+    const alarmSound = document.getElementById("alarm-sound");
+
+    let reminders = [];
+    let userPhone = null;
+    let userName = null;
+    let initialized = false;
+    let step = 0;
+    let selectedTime = null;
+    let medicineName = null;
+
+    window.onload = () => {
+      addMessage("bot", "Hi! Please type 'hyy' to begin the conversation.");
+      loadFromLocalStorage();
+    };
+
+    function addMessage(sender, message) {
+      const msgDiv = document.createElement("div");
+      msgDiv.classList.add(sender);
+      msgDiv.textContent = ${sender === "user" ? "You" : "Bot"}: ${message};
+      chatLog.appendChild(msgDiv);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function sendMessage() {
+      const message = userInput.value.trim();
+      if (message === "") return;
+      addMessage("user", message);
+      userInput.value = "";
+      processMessage(message);
+    }
+
+    userInput.addEventListener("keypress", function(e) {
+      if (e.key === "Enter") sendMessage();
+    });
+
+    function resetChat() {
+      chatLog.innerHTML = "";
+      reminders = [];
+      userPhone = null;
+      userName = null;
+      initialized = false;
+      step = 0;
+      selectedTime = null;
+      medicineName = null;
+      localStorage.removeItem("reminders");
+      addMessage("bot", "Chat reset! Please type 'hyy' to begin the conversation again.");
+    }
+
+    function validatePhoneNumber(number) {
+      const regex = /^[6-9]\d{9}$/;
+      return regex.test(number);
+    }
+
+    function processMessage(message) {
+      const msg = message.toLowerCase();
+
+      if (!initialized) {
+        if (["hyy", "hi", "hello"].includes(msg)) {
+          initialized = true;
+          step = 1;
+          addMessage("bot", "Great! Let's get started. What's your name?");
+        } else {
+          addMessage("bot", "Please type 'hyy' to begin the conversation.");
+        }
+        return;
+      }
+
+      if (step === 1) {
+        userName = message.split(" ")[0];
+        step = 2;
+        addMessage("bot", Nice to meet you, ${userName}! Can you please tell me your phone number?);
+        return;
+      }
+
+      if (step === 2) {
+        const number = message.match(/\d{10}/);
+        if (number && validatePhoneNumber(number[0])) {
+          userPhone = number[0];
+          step = 3;
+          addMessage("bot", Thanks ${userName}, your number is saved! What medicine do you want to be reminded to take?);
+        } else {
+          addMessage("bot", Oops ${userName}, please enter a valid 10-digit Indian phone number.);
+        }
+        return;
+      }
+
+      if (step === 3) {
+        medicineName = message;
+        step = 4;
+        addMessage("bot", Got it! Now let's set the time. Please select the hour, minute, and AM/PM.);
+        showTimeDropdown();
+        return;
+      }
+
+      if (step === 5 && selectedTime && medicineName) {
+        reminders.push({ medicineName, time: selectedTime });
+        saveToLocalStorage();
+        addMessage("bot", ✅ Reminder set! You have to take "${medicineName}" at ${selectedTime}. Type 'another' to add a new one or 'done' to finish.);
+        scheduleAlarm(selectedTime);
+        step = 6;
+        return;
+      }
+
+      if (step === 6) {
+        if (msg === "another") {
+          step = 3;
+          addMessage("bot", "What medicine do you want to be reminded to take?");
+        } else if (msg === "done") {
+          addMessage("bot", Okay ${userName}, I'm all set with your reminders!);
+        } else {
+          addMessage("bot", "Type 'another' to add another reminder or 'done' to finish.");
+        }
+        return;
+      }
+
+      if (msg === "show my reminders") {
+        if (reminders.length === 0) {
+          addMessage("bot", "You don't have any reminders yet.");
+        } else {
+          reminders.forEach((reminder, index) => {
+            addMessage("bot", ${index + 1}. ${reminder.medicineName} at ${reminder.time});
+          });
+        }
+      }
+    }
+
+    function showTimeDropdown() {
+      const msgDiv = document.createElement("div");
+      msgDiv.classList.add("bot");
+
+      const hoursOptions = Array.from({ length: 12 }, (_, i) => <option value='${i + 1}'>${i + 1}</option>).join("");
+      const minutesOptions = Array.from({ length: 60 }, (_, i) => <option value='${String(i).padStart(2, '0')}'>${String(i).padStart(2, '0')}</option>).join("");
+      const ampmOptions = ["AM", "PM"].map(m => <option value='${m.toLowerCase()}'>${m}</option>).join("");
+
+      msgDiv.innerHTML = `Bot: Please choose a time:
+        <div class="dropdown-wrapper">
+          <select id="hour-select">${hoursOptions}</select>
+          <select id="minute-select">${minutesOptions}</select>
+          <select id="ampm-select">${ampmOptions}</select>
+          <button onclick="saveSelectedTime()">Confirm</button>
+        </div>`;
+
+      chatLog.appendChild(msgDiv);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function saveSelectedTime() {
+      const hour = document.getElementById("hour-select")?.value;
+      const minute = document.getElementById("minute-select")?.value;
+      const ampm = document.getElementById("ampm-select")?.value;
+      if (!hour || !minute || !ampm) {
+        addMessage("bot", "⚠️ Please select all time values properly.");
+        return;
+      }
+      selectedTime = ${hour}:${minute}${ampm};
+      step = 5;
+      processMessage("confirm-time");
+    }
+
+    function scheduleAlarm(timeString) {
+      const now = new Date();
+      const [hour, minute, modifier] = timeString.match(/(\d+):(\d+)(am|pm)/i).slice(1);
+      let hours = parseInt(hour);
+      const minutes = parseInt(minute);
+
+      if (modifier.toLowerCase() === "pm" && hours !== 12) hours += 12;
+      if (modifier.toLowerCase() === "am" && hours === 12) hours = 0;
+
+      const alarmTime = new Date();
+      alarmTime.setHours(hours);
+      alarmTime.setMinutes(minutes);
+      alarmTime.setSeconds(0);
+
+      let delay = alarmTime - now;
+      if (delay < 0) delay += 24 * 60 * 60 * 1000;
+
+      setTimeout(() => {
+        alarmSound.play();
+        const msg = ⏰ Reminder: ${userName}, it's time to take your medicine - ${medicineName} at ${selectedTime};
+        addMessage("bot", msg);
+
+        const utterance = new SpeechSynthesisUtterance(msg);
+        const voices = speechSynthesis.getVoices();
+        utterance.voice = voices.find(voice => voice.name.toLowerCase().includes("female")) || voices[0];
+
+        utterance.onend = () => {
+          alarmSound.pause();
+          alarmSound.currentTime = 0;
+        };
+
+        speechSynthesis.speak(utterance);
+        alert(msg);
+        alarmSound.pause();
+        alarmSound.currentTime = 0;
+      }, delay);
+    }
+
+    function saveToLocalStorage() {
+      localStorage.setItem("reminders", JSON.stringify(reminders));
+    }
+
+    function loadFromLocalStorage() {
+      const saved = JSON.parse(localStorage.getItem("reminders") || "[]");
+      reminders = saved;
+      if (reminders.length) {
+        reminders.forEach(r => scheduleAlarm(r.time, r.medicineName));
+      }
+    }
+  </script>
+  <audio id="background-music" autoplay loop>
+    <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" type="audio/mpeg" />
+    Your browser does not support the audio element.
+  </audio>
+  
+</body>
+</html>
